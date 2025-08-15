@@ -40,6 +40,7 @@ class Value {
       return ptr;
     }
     template<typename T>
+    // [[nodiscard]]意味着调用者必须使用返回值，如果忽略返回值，编译器会发出警告
     [[nodiscard]] const T* as() const {
         static_assert(std::is_base_of<Value, T>::value, "T must be a subclass of Value");
         const auto ptr = dynamic_cast<const T*>(this);

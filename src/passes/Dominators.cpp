@@ -14,6 +14,12 @@ void Dominators::run() {
         if(f->is_declaration())
             continue;
         run_on_func(f);
+        /*
+        dump_cfg(f);
+        dump_dominator_tree(f);
+        print_idom(f);
+        print_dominance_frontier(f);
+        */
     }
 }
 
@@ -30,6 +36,17 @@ void Dominators::run() {
  * 6. 创建支配树的DFS序
  */
 void Dominators::run_on_func(Function *f) {
+    /*
+    reverse_post_order_.clear();
+    post_order_id_.clear();
+    post_order_vec_.clear();
+    post_order_.clear();
+    idom_.clear();
+    dom_frontier_.clear();
+    dom_tree_succ_blocks_.clear();
+    dom_tree_L_.clear();
+    dom_tree_R_.clear();
+    */
     dom_post_order_.clear();
     dom_dfs_order_.clear();
     for(auto &bb1 : f->get_basic_blocks()) {
@@ -76,6 +93,19 @@ BasicBlock *Dominators::intersect(BasicBlock *b1, BasicBlock *b2) {
 void Dominators::create_reverse_post_order(Function *f) {
     BBSet visited;
     dfs(f->get_entry_block(), visited);
+    // 删除多余的块
+    std::vector<BasicBlock*> to_delete;
+    for (auto &bb1 : f->get_basic_blocks()) {
+        auto *bb = &bb1;
+        if (std::find(post_order_vec_.begin(), post_order_vec_.end(), bb) == post_order_vec_.end()) {
+            to_delete.push_back(bb);
+        }
+    }
+    for (auto *bb : to_delete) {
+        bb->erase_from_parent();
+    }
+
+    reverse_post_order_ = std::list(post_order_vec_.rbegin(), post_order_vec_.rend());
 }
 
 /**
@@ -107,7 +137,32 @@ void Dominators::dfs(BasicBlock *bb, std::set<BasicBlock *> &visited) {
  */
 void Dominators::create_idom(Function *f) {
     // TODO 分析得到 f 中各个基本块的 idom
-    throw "Unimplemented create_idom";
+    // throw "Unimplemented create_idom";
+    auto *entry = f->get_entry_block();
+    set_idom(entry, entry);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (auto *bb : reverse_post_order_) {
+            if (bb == entry) continue;
+            BasicBlock *new_idom = nullptr;
+            for (auto *pre : bb->get_pre_basic_blocks()) {
+                if (get_idom(pre)) {
+                    new_idom = pre;
+                    break;
+                }
+            }
+            for (auto *pre : bb->get_pre_basic_blocks()) {
+                if (get_idom(pre) && pre != new_idom) {
+                    new_idom = intersect(pre, new_idom);
+                }
+            }
+            if (get_idom(bb) != new_idom) {
+                set_idom(bb, new_idom);
+                changed = true;
+            }
+        }
+    }
 }
 
 /**
@@ -120,8 +175,20 @@ void Dominators::create_idom(Function *f) {
  */
 void Dominators::create_dominance_frontier(Function *f) {
     // TODO 分析得到 f 中各个基本块的支配边界集合
-    throw "Unimplemented create_dominance_frontier";
-
+    // throw "Unimplemented create_dominance_frontier";
+    for (auto &bb1 : f->get_basic_blocks()) {
+        auto bb = &bb1;
+        auto &prebb = bb->get_pre_basic_blocks();
+        if (prebb.size() >= 2) {
+            for (auto *pre : prebb) {
+                auto *runner = pre;
+                while (runner != idom_[bb]) {
+                    if (runner != bb) dom_frontier_[runner].insert(bb);
+                    runner = get_idom(runner);
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -133,7 +200,18 @@ void Dominators::create_dominance_frontier(Function *f) {
  */
 void Dominators::create_dom_tree_succ(Function *f) {
     // TODO 分析得到 f 中各个基本块的支配树后继
-    throw "Unimplemented create_dom_tree_succ";
+    // throw "Unimplemented create_dom_tree_succ";
+    for (auto &bb1 : f->get_basic_blocks()) {
+        auto *bb = &bb1;
+        auto *entry = f->get_entry_block();
+        if (bb == entry) continue;
+        auto *idom = get_idom(bb);
+        while (idom != entry) {
+            add_dom_tree_succ_block(idom, bb);
+            idom = get_idom(idom);
+        }
+        add_dom_tree_succ_block(idom, bb);
+    }
 }
 
 /**

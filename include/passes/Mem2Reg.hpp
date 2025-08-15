@@ -13,7 +13,10 @@ class Mem2Reg : public Pass {
     std::unique_ptr<Dominators> dominators_;
     std::map<Value *, Value *> phi_map;
     // TODO 添加需要的变量
-
+    // 存储load指令,用于rename的操作数替换
+    std::vector<LoadInst *> ld_instr_vec;
+    // 标记执行过rename的基本块
+    std::vector<BasicBlock*> rename_mark_bb;
     // 变量定值栈
     std::map<Value *, std::vector<Value *>> var_val_stack;
     // phi指令对应的左值(地址)

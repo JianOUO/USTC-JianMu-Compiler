@@ -27,6 +27,8 @@ void Mem2Reg::run() {
         if (f.is_declaration())
             continue;
         func_ = &f;
+        ld_instr_vec.clear();
+        rename_mark_bb.clear();
         var_val_stack.clear();
         phi_lval.clear();
         if (func_->get_basic_blocks().size() >= 1) {
@@ -104,6 +106,7 @@ void Mem2Reg::generate_phi() {
 
 void Mem2Reg::rename(BasicBlock *bb) {
     std::vector<Instruction *> wait_delete;
+    rename_mark_bb.push_back(bb);
     // TODO
     // 步骤一：将 phi 指令作为 lval 的最新定值，lval 即是为局部变量 alloca 出的地址空间
     // 步骤二：用 lval 最新的定值替代对应的load指令
@@ -111,7 +114,69 @@ void Mem2Reg::rename(BasicBlock *bb) {
     // 步骤四：为 lval 对应的 phi 指令参数补充完整
     // 步骤五：对 bb 在支配树上的所有后继节点，递归执行 re_name 操作
     // 步骤六：pop出 lval 的最新定值
-    
+    for (auto &instr : bb->get_instructions()) {
+        if (instr.is_phi()) {
+            auto *phi = dynamic_cast<PhiInst *>(&instr);
+            var_val_stack[phi_lval[phi]].push_back(phi);
+        }
+        for (unsigned int i = 0; i < instr.get_num_operand(); i++) {
+            auto *op = instr.get_operand(i);
+            auto *ld = dynamic_cast<LoadInst *>(op);
+            if (ld) {
+                auto it = std::find(ld_instr_vec.begin(), ld_instr_vec.end(), op);
+                if (it != ld_instr_vec.end()) {
+                    assert(var_val_stack.find(ld->get_lval()) != var_val_stack.end());
+                    instr.set_operand(i, var_val_stack[ld->get_lval()].back());
+                }
+            } 
+        }
+        if (instr.is_store()) {
+            auto *st = dynamic_cast<StoreInst *>(&instr);
+            auto *lval = st->get_lval();
+            if (is_valid_ptr(lval)) {
+                var_val_stack[lval].push_back(st->get_rval());
+                wait_delete.push_back(st);
+            }
+        } else if (instr.is_load()) {
+            auto *ld = dynamic_cast<LoadInst *>(&instr);
+            auto *lval = ld->get_lval();
+            if (is_valid_ptr(lval)) {
+                ld_instr_vec.push_back(ld);
+                wait_delete.push_back(ld);
+            }
+        } 
+    }
+    for (auto *bb_succ : bb->get_succ_basic_blocks()) {
+        for (auto &instr : bb_succ->get_instructions()) {
+            if (instr.is_phi()) {
+                auto *phi = dynamic_cast<PhiInst *>(&instr);
+                auto *lval = phi_lval[phi];
+                if (!var_val_stack[lval].empty()) {
+                    assert(var_val_stack[lval].back());
+                    phi->add_phi_pair_operand(var_val_stack[lval].back(), bb);
+                }
+            }
+        }
+    }
+    std::set<BasicBlock *> bbset = dominators_->get_dom_tree_succ_blocks(bb);
+    for (auto *bb_succ : bbset) {
+        auto it = std::find(rename_mark_bb.begin(), rename_mark_bb.end(), bb_succ);
+        if (it == rename_mark_bb.end()) {
+            rename(bb_succ);
+        } 
+    }
+    for (auto &instr : bb->get_instructions()) {
+        if (instr.is_phi()) {
+            auto *phi = dynamic_cast<PhiInst *>(&instr);
+            var_val_stack[phi_lval[phi]].pop_back();
+        } else if (instr.is_store()) {
+            auto *st = dynamic_cast<StoreInst *>(&instr);
+            auto *lval = st->get_lval();
+            if (is_valid_ptr(lval)) {
+                var_val_stack[lval].pop_back();
+            }
+        }
+    }
     // 步骤七：清除冗余的指令
     for (auto instr : wait_delete) {
         bb->erase_instr(instr);

@@ -11,6 +11,7 @@ struct pair_hash {
     std::size_t operator()(const std::pair<T, Module *> val) const {
         auto lhs = std::hash<T>()(val.first);
         auto rhs =
+            // uintptr_t - 保证能容纳指针值的无符号整数类型
             std::hash<uintptr_t>()(reinterpret_cast<uintptr_t>(val.second));
         return lhs ^ rhs;
     }

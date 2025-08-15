@@ -68,6 +68,7 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
     // 由不同的表达式填充
     if (n->children_num == 3) {
       node->id = n->children[1]->name;
+      node->num = nullptr;
     } else if (n->children_num == 6) {
       node->id = n->children[1]->name;
       int num = std::stoi(n->children[3]->name);
@@ -104,9 +105,24 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
     */
     // TODO: 1.fill in the fields of ASTFunDeclaration
     // 1.1 flatten params
-
+    auto param_list = n->children[3]->children[0];
+    if (_STR_EQ(param_list->name, "param-list")) {
+      std::stack<syntax_tree_node *> s;
+      while (param_list->children_num == 3) {
+        s.push(param_list->children[2]);
+        param_list = param_list->children[0];
+      }
+      s.push(param_list->children[0]);
+      while (!s.empty()) {
+        auto param_node = static_cast<ASTParam *>(transform_node_iter(s.top()));
+        auto param_node_shared = std::shared_ptr<ASTParam>(param_node);
+        node->params.push_back(param_node_shared);
+        s.pop();
+      }
+    }
     // 1.2 compound_stmt 字段填充
-
+    auto compound_stmt_node = static_cast<ASTCompoundStmt *>(transform_node_iter(n->children[5]));
+    node->compound_stmt = std::shared_ptr<ASTCompoundStmt>(compound_stmt_node);
     return node;
   } else if (_STR_EQ(n->name, "param")) {
     // param -> type-specifier ID | type-specifier ID [ ]
@@ -132,10 +148,29 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
     */
     // local declarations
     // 2.1 flatten local declarations
-
+    auto local_decl = n->children[1];
+    std::stack<syntax_tree_node *> s;
+    while (local_decl->children_num == 2) {
+      s.push(local_decl->children[1]);
+      local_decl = local_decl->children[0];
+    }
+    while (!s.empty()) {
+      auto local_decl_node = static_cast<ASTVarDeclaration *>(transform_node_iter(s.top()));
+      node->local_declarations.push_back(std::shared_ptr<ASTVarDeclaration>(local_decl_node));
+      s.pop();
+    }
     // statement list
     // 2.2 flatten statement-list
-
+    auto stmt_list = n->children[2];
+    while (stmt_list->children_num == 2) {
+      s.push(stmt_list->children[1]);
+      stmt_list = stmt_list->children[0];
+    }
+    while (!s.empty()) {
+      auto stmt_list_node = static_cast<ASTStatement *>(transform_node_iter(s.top()));
+      node->statement_list.push_back(std::shared_ptr<ASTStatement>(stmt_list_node));
+      s.pop();
+    }
     return node;
   } else if (_STR_EQ(n->name, "statement")) {
     return transform_node_iter(n->children[0]);
@@ -147,6 +182,8 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
 
       auto expr_node_ptr = std::shared_ptr<ASTExpression>(expr_node);
       node->expression = expr_node_ptr;
+    } else {
+      node->expression = nullptr;
     }
     return node;
   } else if (_STR_EQ(n->name, "selection-stmt")) {
@@ -157,13 +194,18 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
       statement else statement ASTSelectionStmt的结构，需要填充的字段有
       expression, if_statement, else_statement
     */
-    // 5.1 expresstion
-
+    // 5.1 expression
+    auto expr_node = static_cast<ASTExpression *>(transform_node_iter(n->children[2]));
+    node->expression = std::shared_ptr<ASTExpression>(expr_node);
     // 5.2 if statement
-
+    auto if_stmt_node = static_cast<ASTStatement *>(transform_node_iter(n->children[4]));
+    node->if_statement = std::shared_ptr<ASTStatement>(if_stmt_node);
     // check whether this selection statement contains
     // 5.3 else structure
-
+    if (n->children_num == 7) {
+      auto else_stmt_node = static_cast<ASTStatement *>(transform_node_iter(n->children[6]));
+      node->else_statement = std::shared_ptr<ASTStatement>(else_stmt_node);
+    }
     return node;
   } else if (_STR_EQ(n->name, "iteration-stmt")) {
     auto node = new ASTIterationStmt();
@@ -248,7 +290,17 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
         additive-expression -> additive-expression addop term | term 
       */
       // additive_expression, term, op
-
+      auto additive_expr_node = static_cast<ASTAdditiveExpression *>(transform_node_iter(n->children[0]));
+      node->additive_expression = std::shared_ptr<ASTAdditiveExpression>(additive_expr_node);
+      auto op_name = n->children[1]->children[0]->name;
+      if (_STR_EQ(op_name, "+")) {
+        node->op = OP_PLUS;
+      } else {
+        node->op = OP_MINUS;
+      }
+      auto term_node =
+          static_cast<ASTTerm *>(transform_node_iter(n->children[2]));
+      node->term = std::shared_ptr<ASTTerm>(term_node);
     } else {
       auto term_node =
           static_cast<ASTTerm *>(transform_node_iter(n->children[0]));
@@ -296,10 +348,12 @@ ASTNode *AST::transform_node_iter(syntax_tree_node *n) {
       */
       if (_STR_EQ(name, "integer")) {
         // 3.1
-
+        num_node->type = TYPE_INT;
+        num_node->i_val = std::stoi(n->children[0]->children[0]->name);
       } else if (_STR_EQ(name, "float")) {
         // 3.2
-
+        num_node->type = TYPE_FLOAT;
+        num_node->f_val = std::stof(n->children[0]->children[0]->name);
       } else {
         _AST_NODE_ERROR_
       }

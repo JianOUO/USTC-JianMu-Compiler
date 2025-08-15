@@ -10,6 +10,7 @@
 #define LOW_20_MASK 0x000FFFFF
 #define LOW_32_MASK 0xFFFFFFFF
 
+//返回 ≥ x 的最小对齐值
 inline unsigned ALIGN(unsigned x, unsigned alignment) {
     return ((x + (alignment - 1)) & ~(alignment - 1));
 }
