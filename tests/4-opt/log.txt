@@ -1,0 +1,60 @@
+==========./testcases/loop/loop-1.cminus==========
+Loop Detection Result:
+loops number: 2
+Loop header: label6
+Loop blocks: label6 label10 
+Sub loops: 
+Loop header: label0
+Loop blocks: label0 label31 label6 label10 label4 
+Sub loops: label6 
+==========./testcases/loop/loop-2.cminus==========
+Loop Detection Result:
+loops number: 2
+Loop header: label6
+Loop blocks: label6 label10 
+Sub loops: 
+Loop header: label0
+Loop blocks: label0 label31 label6 label10 label4 
+Sub loops: label6 
+==========./testcases/loop/loop-3.cminus==========
+Loop Detection Result:
+loops number: 6
+Loop header: label34
+Loop blocks: label34 label38 
+Sub loops: 
+Loop header: label27
+Loop blocks: label27 label59 label34 label38 label31 
+Sub loops: label34 
+Loop header: label20
+Loop blocks: label20 label32 label27 label59 label34 label38 label31 label24 
+Sub loops: label27 
+Loop header: label13
+Loop blocks: label13 label25 label20 label32 label27 label59 label34 label38 label31 label24 label17 
+Sub loops: label20 
+Loop header: label6
+Loop blocks: label6 label18 label13 label25 label20 label32 label27 label59 label34 label38 label31 label24 label17 label10 
+Sub loops: label13 
+Loop header: label0
+Loop blocks: label0 label11 label6 label18 label13 label25 label20 label32 label27 label59 label34 label38 label31 label24 label17 label10 label4 
+Sub loops: label6 
+==========./testcases/loop/loop-4.cminus==========
+Loop Detection Result:
+loops number: 6
+Loop header: label37
+Loop blocks: label37 label48 label46 label42 
+Sub loops: 
+Loop header: label29
+Loop blocks: label29 label44 label37 label48 label46 label42 label34 
+Sub loops: label37 
+Loop header: label21
+Loop blocks: label21 label35 label29 label44 label37 label48 label46 label42 label34 label26 
+Sub loops: label29 
+Loop header: label13
+Loop blocks: label13 label27 label21 label35 label29 label44 label37 label48 label46 label42 label34 label26 label18 
+Sub loops: label21 
+Loop header: label6
+Loop blocks: label6 label19 label13 label27 label21 label35 label29 label44 label37 label48 label46 label42 label34 label26 label18 label10 
+Sub loops: label13 
+Loop header: label0
+Loop blocks: label0 label11 label6 label19 label13 label27 label21 label35 label29 label44 label37 label48 label46 label42 label34 label26 label18 label10 label4 
+Sub loops: label6 

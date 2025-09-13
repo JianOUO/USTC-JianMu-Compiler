@@ -41,6 +41,7 @@ void LoopInvariantCodeMotion::traverse_loop(std::shared_ptr<Loop> loop) {
     for (auto &sub_loop : loop->get_sub_loops()) {
         traverse_loop(sub_loop);
     }
+    //if (!loop->get_sub_loops().empty()) return;
     run_on_loop(loop);
 }
 
@@ -54,8 +55,26 @@ void LoopInvariantCodeMotion::collect_loop_info(
     std::set<Value *> &loop_instructions,
     std::set<Value *> &updated_global,
     bool &contains_impure_call) {
-    
-    throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+    for (auto &block : loop->get_blocks()) {
+        for (auto &inst : block->get_instructions()) {
+            loop_instructions.insert(&inst);
+            if (inst.is_store()) {
+                auto *lval = dynamic_cast<StoreInst *>(&inst)->get_lval();
+                if (dynamic_cast<GlobalVariable *>(lval) != nullptr) {
+                    updated_global.insert(lval);
+                }    
+            }
+            if (inst.is_call()) {
+                auto *call = dynamic_cast<CallInst *>(&inst);
+                auto *func = dynamic_cast<Function *>(call->get_operand(0));
+                if (!(func_info_->is_pure_function(func))) {
+                    contains_impure_call = true;
+                }
+            } 
+        }
+
+    }
+    //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
 }
 
 /**
@@ -83,19 +102,58 @@ void LoopInvariantCodeMotion::run_on_loop(std::shared_ptr<Loop> loop) {
     bool changed;
     do {
         changed = false;
-
-        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
-
+        for (auto &inst_ : loop_instructions) {
+            auto *inst = static_cast<Instruction *>(inst_);
+            auto id = std::find(loop_invariant.begin(), loop_invariant.end(), inst);
+            if (id != loop_invariant.end()) continue;
+            if (inst->is_store() || inst->is_ret() || inst->is_br() || inst->is_phi()) continue;
+            if (inst->is_call()){
+                auto *call = dynamic_cast<CallInst *>(inst);
+                auto *func = dynamic_cast<Function *>(call->get_operand(0));
+                if (!(func_info_->is_pure_function(func))) {
+                    continue;
+                }
+            }
+            if (inst->is_load()) {
+                auto *op = dynamic_cast<LoadInst *>(inst)->get_operand(0);
+                if (dynamic_cast<GlobalVariable *>(op) != nullptr) {
+                    if (updated_global.find(op) == updated_global.end()) { 
+                        loop_invariant.push_back(inst);
+                        changed = true;
+                    }
+                    continue;
+                }
+            }
+            bool invariant = true;
+            for (auto &op : inst->get_operands()) {
+                auto id = std::find(loop_invariant.begin(), loop_invariant.end(), op);
+                if (!(id != loop_invariant.end() || dynamic_cast<Constant *>(op) != nullptr || loop_instructions.find(op) == loop_instructions.end())) {
+                    invariant = false;
+                    break;
+                }
+            }
+            if (invariant) {
+                loop_invariant.push_back(inst);
+                changed = true;
+            }
+        }
+        //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
     } while (changed);
 
     if (loop->get_preheader() == nullptr) {
         loop->set_preheader(
             BasicBlock::create(m_, "", loop->get_header()->get_parent()));
     }
+   /* 
+    if (!loop->get_sub_loops().empty()) {
+        return;
+        assert(loop_invariant.empty());
+    }
+    */
 
     if (loop_invariant.empty())
         return;
-
+    
     // insert preheader
     auto preheader = loop->get_preheader();
 
@@ -103,8 +161,20 @@ void LoopInvariantCodeMotion::run_on_loop(std::shared_ptr<Loop> loop) {
     for (auto &phi_inst_ : loop->get_header()->get_instructions()) {
         if (phi_inst_.get_instr_type() != Instruction::phi)
             break;
-        
-        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+        auto *phi_inst = dynamic_cast<PhiInst *>(&phi_inst_);
+        auto *preheader_phi = PhiInst::create_phi(phi_inst->get_type(), preheader);
+        auto &latches = loop->get_latches();
+        for (auto &phi_pair : phi_inst->get_phi_pairs()) {
+            if (latches.find(phi_pair.second) == latches.end()) {
+                preheader_phi->add_phi_pair_operand(phi_pair.first, phi_pair.second);
+                phi_inst->remove_phi_operand(phi_pair.second);
+            }
+        }
+        if (preheader_phi->get_num_operand() != 0) {
+            preheader->add_instr_begin(preheader_phi);
+            phi_inst->add_phi_pair_operand(preheader_phi, preheader);
+        }
+        //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
     }
 
     // TODO: 用跳转指令重构控制流图 
@@ -112,16 +182,40 @@ void LoopInvariantCodeMotion::run_on_loop(std::shared_ptr<Loop> loop) {
     // 并将 preheader 的跳转指向 header
     // 注意这里需要更新前驱块的后继和后继的前驱
     std::vector<BasicBlock *> pred_to_remove;
+    auto &latches = loop->get_latches();
     for (auto &pred : loop->get_header()->get_pre_basic_blocks()) {
-        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+        //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+        if (latches.find(pred) != latches.end()) continue;
+        pred_to_remove.push_back(pred);
+        auto *br = dynamic_cast<BranchInst *>(pred->get_terminator());
+        assert(br);
+        for (unsigned int i = 0; i < br->get_num_operand(); i++) {
+            if (br->get_operand(i) == loop->get_header()) {
+                br->set_operand(i, preheader);
+                break;
+            }
+        }
+        pred->remove_succ_basic_block(loop->get_header());
+        pred->add_succ_basic_block(preheader);
+        preheader->add_pre_basic_block(pred);
     }
+
 
     for (auto &pred : pred_to_remove) {
         loop->get_header()->remove_pre_basic_block(pred);
     }
 
     // TODO: 外提循环不变指令
-    throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+    for (auto &inst_ : loop_invariant) {
+        auto *inst = dynamic_cast<Instruction *>(inst_);
+        inst->get_parent()->remove_instr(inst);
+        inst->set_parent(preheader);
+        //assert(inst->get_instr_type() != Instruction::ret && inst->get_instr_type() != Instruction::br);
+        preheader->add_instruction(inst);
+    }
+    //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+    //preheader->get_terminator();
+    //std::cerr << "hello" << std::endl;
 
     // insert preheader br to header
     BranchInst::create_br(loop->get_header(), preheader);

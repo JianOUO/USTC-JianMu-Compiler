@@ -206,10 +206,6 @@ void Dominators::create_dom_tree_succ(Function *f) {
         auto *entry = f->get_entry_block();
         if (bb == entry) continue;
         auto *idom = get_idom(bb);
-        while (idom != entry) {
-            add_dom_tree_succ_block(idom, bb);
-            idom = get_idom(idom);
-        }
         add_dom_tree_succ_block(idom, bb);
     }
 }

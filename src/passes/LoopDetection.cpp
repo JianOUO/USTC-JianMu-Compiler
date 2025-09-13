@@ -51,7 +51,12 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
              * 2. 更新bb_to_loop_映射
              * 3. 将bb的所有前驱加入工作表
              */
-        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
+            loop->add_block(bb);
+            bb_to_loop_[bb] = loop;
+            for (auto &bb1 : bb->get_pre_basic_blocks()) {
+                work_list.push_back(bb1);
+            }
+        //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
         
         }
         // TODO-2: 处理已属于其他循环的节点
@@ -66,9 +71,22 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
              * 5. 将子循环的所有基本快加入到父循环中
              * 6. 将子循环header的前驱加入工作表
              */
-
-        throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
-
+             auto sub_loop = bb_to_loop_[bb];
+             while (sub_loop->get_parent() != nullptr) {
+                sub_loop = sub_loop->get_parent();
+             }
+             if (sub_loop == loop) {
+                continue;
+             } 
+             sub_loop->set_parent(loop);
+             loop->add_sub_loop(sub_loop);
+             for (auto &block : sub_loop->get_blocks()) {
+                loop->add_block(block);
+             }
+             for (auto &pred : sub_loop->get_header()->get_pre_basic_blocks()) {
+                if (bb_to_loop_.find(pred) == bb_to_loop_.end() || bb_to_loop_[pred] != sub_loop) work_list.push_back(pred);
+             }
+        //throw std::runtime_error("Lab4: 你有一个TODO需要完成！");
         }
     }
 }
@@ -88,16 +106,21 @@ void LoopDetection::discover_loop_and_sub_loops(BasicBlock *bb, BBset &latches,
  */
 void LoopDetection::run_on_func(Function *f) {
     dominators_->run_on_func(f);
+    dominators_->dump_cfg(f);
+    dominators_->dump_dominator_tree(f);
+    //std::cerr << "get_dom_post_order.size(): " << dominators_->get_dom_post_order().size() << std::endl;
+    //std::cerr << "get_dom_dfs_order.size(): " << dominators_->get_dom_dfs_order().size() << std::endl;
     for (auto &bb1 : dominators_->get_dom_post_order()) {
         auto bb = bb1;
         BBset latches;
-        for (auto &pred : bb->get_pre_basic_blocks()) {
+        // std::cerr << "pre_blocks.size():" << bb->get_pre_basic_blocks().size() << std::endl;
+        for (auto &pred : bb->get_pre_basic_blocks()) { 
             if (dominators_->is_dominate(bb, pred)) {
                 // pred is a back edge
                 // pred -> bb , pred is the latch node
                 latches.insert(pred);
             }
-        }
+        } 
         if (latches.empty()) {
             continue;
         }
@@ -124,6 +147,7 @@ void LoopDetection::run_on_func(Function *f) {
 void LoopDetection::print() {
     m_->set_print_name();
     std::cerr << "Loop Detection Result:" << std::endl;
+    std::cerr << "loops number: " << loops_.size() << std::endl;
     for (auto &loop : loops_) {
         std::cerr << "Loop header: " << loop->get_header()->get_name()
                   << std::endl;
